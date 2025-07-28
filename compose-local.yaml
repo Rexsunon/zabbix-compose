@@ -29,7 +29,7 @@ services:
     image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
     container_name: zabbix-server-pgsql
     restart: unless-stopped
-    enviroment:
+    environment:
       - DB_SERVER_HOST=postgres
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -52,7 +52,7 @@ services:
       - PHP_TZ=${PHP_TZ}
     depends_on:
       - zabbix-server-pgsql
-    posts:
+    ports:
       - "8080:8080"
     networks:
       - zabbix-net
