@@ -1,0 +1,77 @@
+version: '3.8'
+
+networks:
+  zabbix-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          ip_range: 172.20.240.0/20
+
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: always
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
+      - "--certificatesresolvers.mytlschallenge.acme.email=${SSL_EMAIL}"
+      - "--certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - zabbix-net
+    volumes:
+      - traefik_data:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  zabbix-server-pgsql:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    container_name: zabbix-server-pgsql
+    restart: unless-stopped
+    enviroment:
+      - DB_SERVER_HOST=${DB_SERVER_HOST}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "10051:10051"
+    networks:
+      - zabbix-net
+
+  zabbix-web-nginx-pgsql:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    container_name: zabbix-web-nginx-pgsql
+    restart: unless-stopped
+    environment:
+      - DB_SERVER_HOST=${DB_SERVER_HOST}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ZBX_SERVER_HOST=zabbix-server-pgsql
+      - PHP_TZ=${PHP_TZ}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.zabbix.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`)
+      - traefik.http.routers.zabbix.tls=true
+      - traefik.http.routers.zabbix.entrypoints=web,websecure
+      - traefik.http.routers.zabbix.tls.certresolver=mytlschallenge
+      - traefik.http.middlewares.zabbix.headers.SSLRedirect=true
+      - traefik.http.middlewares.zabbix.headers.STSSeconds=315360000
+      - traefik.http.middlewares.zabbix.headers.browserXSSFilter=true
+      - traefik.http.middlewares.zabbix.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.zabbix.headers.forceSTSHeader=true
+      - traefik.http.middlewares.zabbix.headers.SSLHost=${DOMAIN_NAME}
+      - traefik.http.middlewares.zabbix.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.zabbix.headers.STSPreload=true
+      - traefik.http.routers.zabbix.middlewares=zabbix@docker
+    depends_on:
+      zabbix-server-pgsql
+    networks:
+      - zabbix-net
