@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:latest
+    container_name: zabbix-agent
+    restart: unless-stopped
+    environment:
+      - ZBX_SERVER_HOST=${ZBX_SERVER_HOST}
+      - ZBX_HOSTNAME=${ZBX_HOSTNAME}
+      - ZBX_ACTIVE_CHECKS_SERVER=${ZBX_SERVER_HOST}
+    pid: "host"
+    # Grant extended kernel capabilities for low-level monitoring
+    privileged: true
+    volumes:
+      # Mounts the host's filesystems into the container in read-only mode
+      - /:/host/root:ro
+      - /sys:/host/sys:ro
+      - /proc:/host/proc:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
