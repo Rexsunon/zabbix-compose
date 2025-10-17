@@ -20,3 +20,24 @@ services:
       - /sys:/host/sys:ro
       - /proc:/host/proc:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  nginxlog-exporter:
+    image: 'kbudde/nginx-log-exporter:latest'
+    container_name: nginxlog-exporter
+    ports:
+      - "4040:4040"
+    volumes:
+      - /var/log/nginx:/var/log/nginx:ro 
+    command:
+      - '--path=/var/log/nginx/access.log'
+      - '--format=$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"'
+
+  zabbix-sender:
+    build: ./zabbix_sender/
+    container_name: zabbix-sender
+    restart: unless-stopped
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./.env:/scripts/.env:ro
+    environment:
+      - TZ=UTC
